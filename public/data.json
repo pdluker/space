@@ -1,0 +1,16 @@
+{
+  "meta": {
+    "version": "0.1",
+    "lastUpdated": null,
+    "source": "static-fallback"
+  },
+  "launches": {
+    "next7Days": []
+  },
+  "breaking": {
+    "last24h": []
+  },
+  "astronomy": [],
+  "missions": [],
+  "policy": []
+}

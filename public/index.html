@@ -1,0 +1,1279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>STL/Space — The Daily Orbit</title>
+<meta name="description" content="Everything in orbit, briefed. A daily dispatch on launches, missions, and the night sky — sourced from 14 outlets." />
+<meta name="theme-color" content="#F2F2F7" />
+<style>
+  :root{
+    --bg: #F2F2F7;
+    --surface: #FFFFFF;
+    --border: #E5E5EA;
+    --text: #1C1C1E;
+    --text-dim: #6E6E73;
+    --text-faint: #AEAEB2;
+
+    --go: #248A3D;
+    --go-bg: #E5F7EA;
+    --hold: #C86400;
+    --hold-bg: #FFF2E0;
+    --scrub: #D70015;
+    --scrub-bg: #FDE9E8;
+
+    --accent: #0A84FF;
+    --accent-bg: #E8F2FF;
+    --accent-ink: #FFFFFF;
+
+    --astro: #5E5CE6;
+    --astro-bg: #EDECFD;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --radius-card: 16px;
+    --radius-pill: 999px;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 2px 10px rgba(0,0,0,0.04);
+
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.4;
+    padding-bottom: calc(var(--safe-bottom) + 24px);
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; -webkit-appearance: none; appearance: none; border: none; background: none; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .pressable { transition: transform 0.12s ease, opacity 0.12s ease; }
+  .pressable:active { transform: scale(0.96); opacity: 0.85; }
+
+  .network-nav {
+    padding: calc(var(--safe-top) + 12px) 20px 12px;
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    white-space: nowrap;
+    background: var(--bg);
+    scrollbar-width: none;
+  }
+  .network-nav::-webkit-scrollbar { display: none; }
+  .network-nav .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin-right: 4px;
+  }
+  .network-nav .brand svg { flex-shrink: 0; }
+  .network-nav a:active { opacity: 0.5; }
+
+  .hero { padding: 6px 20px 0; max-width: 720px; margin: 0 auto; }
+  .hero-eyebrow {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+  }
+  .hero-eyebrow em { color: var(--text-faint); font-style: normal; font-weight: 500; }
+  .pulse-badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-faint);
+    background: var(--border);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .pulse-badge.fresh { color: var(--go); background: var(--go-bg); }
+
+  .source-warning { margin-top: 6px; }
+  .source-warning-toggle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--hold);
+    background: var(--hold-bg);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .source-warning-list {
+    display: none;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    padding-left: 4px;
+  }
+  .source-warning-list.open { display: block; }
+  .source-warning-list div { margin-bottom: 2px; }
+
+  h1.headline {
+    font-size: clamp(30px, 8vw, 38px);
+    line-height: 1.1;
+    margin: 6px 0 6px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .sub { color: var(--text-dim); font-size: 16px; max-width: 46ch; margin: 0 0 10px; }
+
+  .mission-clock {
+    margin: 18px 0 8px;
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 20px 20px 18px;
+  }
+  .mc-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .mc-label { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+  .mc-status {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 4px 11px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+  }
+  .mc-status.go { color: var(--go); background: var(--go-bg); }
+  .mc-status.hold, .mc-status.tbd { color: var(--hold); background: var(--hold-bg); }
+  .mc-status.scrub { color: var(--scrub); background: var(--scrub-bg); }
+
+  .mc-clock {
+    font-weight: 800;
+    font-size: clamp(32px, 11vw, 48px);
+    letter-spacing: -0.01em;
+    color: var(--text);
+    display: flex;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+  }
+  .mc-clock .unit { display: inline-flex; flex-direction: column; align-items: center; margin-right: 14px; }
+  .mc-clock .num { line-height: 1; }
+  .mc-clock .unitlabel {
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    margin-top: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .mc-mission { margin-top: 14px; font-size: 16px; font-weight: 700; }
+  .mc-meta { margin-top: 3px; font-size: 13.5px; color: var(--text-dim); }
+  .mc-empty { color: var(--text-dim); font-size: 15px; padding: 4px 0 2px; }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 18px 20px 6px;
+    max-width: 720px;
+    margin: 0 auto;
+    scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 14.5px;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-card);
+  }
+  .chip[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: none;
+  }
+
+  .feed { max-width: 720px; margin: 0 auto; padding: 8px 20px 40px; }
+  .feed-section { margin-top: 26px; }
+  .feed-section-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding-left: 4px;
+  }
+
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .launch-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .launch-left { min-width: 0; }
+  .launch-vehicle { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .launch-mission { font-size: 13.5px; color: var(--text-dim); margin-top: 2px; }
+  .launch-meta { font-size: 12px; color: var(--text-faint); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .launch-status { flex: 0 0 auto; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: var(--radius-pill); }
+
+  .empty-state {
+    text-align: center;
+    padding: 36px 20px;
+    color: var(--text-dim);
+    font-size: 14.5px;
+    background: var(--surface);
+    border-radius: var(--radius-card);
+  }
+  .empty-state .big { font-size: 30px; display: block; margin-bottom: 8px; }
+
+  /* ---- Pulse stats row ---- */
+  .pulse-stats {
+    display: flex;
+    gap: 10px;
+    margin: 14px 0 0;
+  }
+  .stat {
+    flex: 1;
+    background: var(--surface);
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .stat-num { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 11px; color: var(--text-dim); font-weight: 600; margin-top: 2px; }
+
+  /* ---- Hero card: gradient card, radial moon gauge, inset glass panel ----
+     Adapted from the earth.stluker.com hero pattern (same structural idea:
+     gradient card + radial gauge + frosted inset panel), reinterpreted in
+     space's light palette rather than porting earth's dark navy/orange
+     treatment — the gradient lives only inside this one card, same way
+     Apple's own Weather app uses a colorful sky-gradient card inside an
+     otherwise plain light list. The gauge is driven by real moon illumination
+     % (already computed locally, never invented) rather than a fabricated
+     "activity score" — deliberately not repeating the 8-axis Importance
+     Engine mistake in a new shape. */
+  .hero-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    padding: 20px 20px 18px;
+    margin: 14px 0 8px;
+    background: linear-gradient(150deg, #4C63E0 0%, #7C6FE8 50%, #F3A65C 100%);
+    color: #fff;
+    box-shadow: 0 10px 28px rgba(76, 99, 224, 0.28);
+  }
+  .hero-watermark {
+    position: absolute;
+    top: -12%;
+    right: -14%;
+    width: 60%;
+    height: auto;
+    opacity: 0.16;
+    pointer-events: none;
+  }
+  .hero-top-row {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .hero-card-eyebrow {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    margin: 0;
+  }
+  .hero-card-title {
+    font-size: clamp(26px, 7vw, 32px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 4px 0 6px;
+    color: #fff;
+    line-height: 1.12;
+  }
+  .hero-card-subtitle {
+    position: relative;
+    font-size: 14px;
+    color: rgba(255,255,255,0.85);
+    margin: 0;
+    line-height: 1.4;
+    max-width: 85%;
+  }
+
+  /* Moon-phase gauge: radial ring, illumination % drives the arc */
+  .moon-gauge-wrap { position: relative; width: 68px; height: 68px; flex-shrink: 0; }
+  .moon-gauge-wrap svg { width: 68px; height: 68px; display: block; }
+  .moon-gauge-track { fill: none; stroke: rgba(255,255,255,0.24); stroke-width: 7; }
+  .moon-gauge-arc {
+    fill: none;
+    stroke-width: 7;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+  }
+  .moon-gauge-arc.phase-dark { stroke: #C7D2FE; }
+  .moon-gauge-arc.phase-quarter { stroke: #93C5FD; }
+  .moon-gauge-arc.phase-gibbous { stroke: #FBBF6B; }
+  .moon-gauge-arc.phase-full { stroke: #FDE68A; }
+  .moon-gauge-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .moon-gauge-emoji { font-size: 18px; line-height: 1; }
+  .moon-gauge-pct { font-size: 13px; font-weight: 800; color: #fff; margin-top: 1px; }
+
+  /* Today's Briefing panel, inset within the hero card (frosted glass, same
+     treatment as .tonight-panel below). Citation styling ported from
+     earth.stluker.com's briefing pattern — {{ref:ID}} markers get resolved
+     into small numbered links back to the real story, not raw text. */
+  .briefing-panel {
+    position: relative;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    backdrop-filter: blur(2px);
+  }
+  .briefing-panel-eyebrow {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.65);
+    margin: 0 0 4px;
+  }
+  .briefing-text { font-size: 14px; color: #fff; margin: 0; font-weight: 500; line-height: 1.42; }
+  .briefing-text.placeholder { color: rgba(255,255,255,0.72); font-style: italic; font-weight: 400; }
+  .briefing-ref {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    margin-left: 2px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.28);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    text-decoration: none;
+    vertical-align: super;
+    line-height: 15px;
+  }
+  .briefing-ref:hover, .briefing-ref:focus-visible { background: rgba(255,255,255,0.45); outline: none; }
+  .briefing-ref:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.8); }
+  .briefing-sources {
+    margin: 10px 0 0;
+    padding: 8px 0 0;
+    border-top: 1px solid rgba(255,255,255,0.18);
+    list-style: none;
+  }
+  .briefing-sources li { font-size: 11.5px; color: rgba(255,255,255,0.65); margin-bottom: 3px; display: flex; gap: 6px; }
+  .briefing-sources a { color: rgba(255,255,255,0.92); text-decoration: underline; }
+  .briefing-sources .ref-num { flex-shrink: 0; font-weight: 700; color: rgba(255,255,255,0.5); }
+
+  /* Tonight's Sky panel, inset within the hero card (frosted glass, same
+     treatment earth uses for its briefing panel) */
+  .tonight-panel {
+    position: relative;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    backdrop-filter: blur(2px);
+  }
+  .tonight-panel-eyebrow {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.65);
+    margin: 0 0 4px;
+  }
+  .tonight-panel-note { font-size: 14px; color: #fff; margin: 0; font-weight: 500; line-height: 1.4; }
+  .tonight-panel-window { font-size: 12px; color: rgba(255,255,255,0.75); margin: 4px 0 0; }
+  .tonight-panel-iss {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.9);
+    margin: 8px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.18);
+  }
+  .tonight-panel-iss strong { color: #fff; }
+
+  /* ---- Bookmark star ---- */
+  .bookmark-btn {
+    flex: 0 0 auto;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px;
+    color: var(--text-faint);
+  }
+  .bookmark-btn.saved { color: var(--hold); }
+
+  /* ---- Revamped news card: image support, category accents ----
+     Additive — .card above stays untouched and still styles
+     .launch-card, which deliberately keeps the old compact treatment.
+     News items now render as .news-card via the updated newsCard()
+     below. Image loads lazily behind a shimmer skeleton (reusing the
+     same skel-shimmer keyframes as the page-load skeleton further down)
+     and gracefully drops to the no-image layout on load failure — see
+     onerror handling in newsCard(). */
+  .news-card {
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .news-card .nc-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--border);
+  }
+  .news-card .nc-media-skel {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--border) 25%, #F0F0F3 37%, var(--border) 63%);
+    background-size: 400% 100%;
+    animation: skel-shimmer 1.4s ease infinite;
+  }
+  .news-card .nc-media-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .news-card .nc-media-img.loaded { opacity: 1; }
+  .news-card .nc-media-overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 26px 12px 10px;
+    background: linear-gradient(to top, rgba(0,0,0,0.72), rgba(0,0,0,0));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .news-card .nc-source-pill {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(255,255,255,0.16);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+  }
+  .news-card .nc-time-pill { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.85); }
+  .news-card .nc-media .bookmark-btn { color: #fff; }
+  .news-card .nc-media .bookmark-btn.saved { color: #FFD60A; }
+
+  .news-card .nc-body { padding: 14px 16px 16px; }
+  .news-card.no-image .nc-body { padding-top: 16px; }
+  .news-card .nc-top-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .news-card .nc-source-text { font-size: 12.5px; font-weight: 700; color: var(--accent); }
+  .news-card .nc-time-text { font-size: 12.5px; color: var(--text-faint); }
+
+  .news-card .nc-cat-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    margin-bottom: 8px;
+  }
+  .news-card .nc-headline { font-size: 17px; font-weight: 800; letter-spacing: -0.015em; line-height: 1.25; margin: 0 0 6px; }
+  .news-card .nc-summary { font-size: 14.5px; color: var(--text-dim); margin: 0 0 10px; }
+  .news-card .nc-why {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-left: 3px solid;
+    background: var(--bg);
+  }
+  .news-card .nc-why-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 3px;
+  }
+  .news-card .nc-cluster { font-size: 12.5px; font-weight: 600; margin-top: 10px; color: var(--text-dim); cursor: pointer; }
+  .news-card .nc-sources-list {
+    display: none;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .news-card .nc-sources-list.open { display: block; }
+
+  /* Category accents — reuses existing go/hold status tokens where the
+     semantics line up (missions=go-green, policy=hold-amber) rather than
+     inventing a parallel color system. */
+  .news-card.launch .nc-cat-tag { color: var(--accent); background: var(--accent-bg); }
+  .news-card.launch .nc-why { border-left-color: var(--accent); }
+  .news-card.launch .nc-why-label { color: var(--accent); }
+
+  .news-card.astronomy .nc-cat-tag { color: var(--astro); background: var(--astro-bg); }
+  .news-card.astronomy .nc-why { border-left-color: var(--astro); }
+  .news-card.astronomy .nc-why-label { color: var(--astro); }
+
+  .news-card.missions .nc-cat-tag { color: var(--go); background: var(--go-bg); }
+  .news-card.missions .nc-why { border-left-color: var(--go); }
+  .news-card.missions .nc-why-label { color: var(--go); }
+
+  .news-card.policy .nc-cat-tag { color: var(--hold); background: var(--hold-bg); }
+  .news-card.policy .nc-why { border-left-color: var(--hold); }
+  .news-card.policy .nc-why-label { color: var(--hold); }
+
+  .news-card.breaking .nc-cat-tag { color: var(--text-dim); background: var(--border); }
+  .news-card.breaking .nc-why { border-left-color: var(--text-faint); }
+  .news-card.breaking .nc-why-label { color: var(--text-dim); }
+
+  /* ---- Dark mode ----
+     Follows system preference. Only the token layer changes — every
+     component above already reads through var(--...), so this block is
+     the entire dark-mode implementation. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: #1C1C1E;
+      --border: #2C2C2E;
+      --text: #FFFFFF;
+      --text-dim: #98989D;
+      --text-faint: #636366;
+      --go: #32D74B;
+      --go-bg: #0F2A17;
+      --hold: #FF9F0A;
+      --hold-bg: #3A2705;
+      --scrub: #FF453A;
+      --scrub-bg: #3A0E0C;
+      --accent: #0A84FF;
+      --accent-bg: #0A2540;
+      --astro: #8886FF;
+      --astro-bg: #201E45;
+    }
+    .skel-line, .news-card .nc-media-skel {
+      background: linear-gradient(90deg, #2C2C2E 25%, #3A3A3C 37%, #2C2C2E 63%);
+      background-size: 400% 100%;
+    }
+  }
+
+  /* ---- Skeleton loading ---- */
+  .skeleton-card {
+    background: var(--surface);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .skel-line {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--border) 25%, #F0F0F3 37%, var(--border) 63%);
+    background-size: 400% 100%;
+    animation: skel-shimmer 1.4s ease infinite;
+    margin-bottom: 8px;
+  }
+  .skel-line.short { width: 40%; }
+  .skel-line.tall { height: 18px; width: 70%; }
+  @keyframes skel-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skel-line { animation: none; }
+  }
+
+  footer {
+    margin-top: 24px;
+    padding: 24px 20px calc(20px + var(--safe-bottom));
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .footer-links {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .footer-links a:active { opacity: 0.5; }
+  .footer-note { font-size: 12px; color: var(--text-faint); line-height: 1.6; }
+
+  @media (min-width: 600px) {
+    .hero, .filters, .feed, footer { padding-left: 28px; padding-right: 28px; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="network-nav" aria-label="STLuker network">
+    <span class="brand">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="2.6" fill="var(--accent)"/>
+        <ellipse cx="12" cy="12" rx="11" ry="4.3" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+      </svg>
+      STLuker Network
+    </span>
+    <a class="pressable" href="https://stluker.com">Home</a>
+    <a class="pressable" href="https://sports.stluker.com">Sports</a>
+    <a class="pressable" href="https://music.stluker.com">Music</a>
+    <a class="pressable" href="https://family.stluker.com">Family</a>
+    <a class="pressable" href="https://status.stluker.com">Status</a>
+  </nav>
+
+  <div class="hero">
+    <div class="hero-card">
+      <svg class="hero-watermark" viewBox="0 0 200 200" aria-hidden="true">
+        <ellipse cx="100" cy="100" rx="92" ry="36" fill="none" stroke="#fff" stroke-width="1"/>
+        <ellipse cx="100" cy="100" rx="92" ry="36" fill="none" stroke="#fff" stroke-width="1" transform="rotate(55 100 100)"/>
+        <ellipse cx="100" cy="100" rx="92" ry="36" fill="none" stroke="#fff" stroke-width="1" transform="rotate(-55 100 100)"/>
+        <circle cx="34" cy="46" r="2" fill="#fff"/>
+        <circle cx="162" cy="58" r="1.5" fill="#fff"/>
+        <circle cx="150" cy="152" r="2.5" fill="#fff"/>
+        <circle cx="46" cy="158" r="1.5" fill="#fff"/>
+        <circle cx="100" cy="18" r="1.5" fill="#fff"/>
+        <circle cx="182" cy="112" r="1.5" fill="#fff"/>
+      </svg>
+
+      <div class="hero-top-row">
+        <div>
+          <p class="hero-card-eyebrow">The Daily Orbit · St. Louis</p>
+          <h1 class="hero-card-title">Everything in orbit, briefed.</h1>
+          <p class="hero-card-subtitle">A daily dispatch on launches, missions, and the night sky — clear, sourced from 14 outlets, no noise.</p>
+        </div>
+        <div class="moon-gauge-wrap" id="moonGaugeWrap">
+          <svg viewBox="0 0 74 74">
+            <circle class="moon-gauge-track" cx="37" cy="37" r="30" />
+            <circle class="moon-gauge-arc phase-dark" id="moonGaugeArc" cx="37" cy="37" r="30" stroke-dasharray="188.5" stroke-dashoffset="188.5" />
+          </svg>
+          <div class="moon-gauge-center">
+            <div class="moon-gauge-emoji" id="moonGaugeEmoji">🌙</div>
+            <div class="moon-gauge-pct" id="moonGaugePct">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="briefing-panel" id="briefingPanel" style="display:none">
+        <p class="briefing-panel-eyebrow">Today's Briefing</p>
+        <p class="briefing-text placeholder" id="briefingText">Checking today's space news&hellip;</p>
+        <ol class="briefing-sources" id="briefingSources" style="display:none"></ol>
+      </div>
+
+      <div class="tonight-panel" id="tonightPanel" style="display:none">
+        <p class="tonight-panel-eyebrow">Tonight's Sky · St. Louis</p>
+        <p class="tonight-panel-note" id="tonightNote"></p>
+        <p class="tonight-panel-window" id="tonightWindow"></p>
+        <p class="tonight-panel-iss" id="tonightIss" style="display:none"></p>
+      </div>
+    </div>
+
+    <span class="pulse-badge" id="pulseBadge">Last pulse: —</span>
+    <div class="source-warning" id="sourceWarning" style="display:none">
+      <button class="source-warning-toggle pressable" id="sourceWarningToggle"></button>
+      <div class="source-warning-list" id="sourceWarningList"></div>
+    </div>
+
+    <div class="pulse-stats" id="pulseStats">
+      <div class="stat"><div class="stat-num" id="statStories">–</div><div class="stat-label">Stories today</div></div>
+      <div class="stat"><div class="stat-num" id="statLaunches">–</div><div class="stat-label">Launches this week</div></div>
+      <div class="stat"><div class="stat-num" id="statSources">–</div><div class="stat-label">Sources checked</div></div>
+    </div>
+
+    <div class="mission-clock" id="missionClock" aria-live="polite">
+      <div class="mc-top">
+        <span class="mc-label">Next launch</span>
+        <span class="mc-status tbd" id="mcStatusPill">—</span>
+      </div>
+      <div id="mcBody">
+        <div class="mc-empty">No launches tracked in the next 7 days yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters" role="tablist" aria-label="Filter by category" id="filters">
+    <button class="chip pressable" role="tab" aria-pressed="true" data-filter="all">All</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="launch">Launches</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="breaking">Breaking</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="astronomy">Astronomy</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="missions">Missions</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="policy">Policy</button>
+    <button class="chip pressable" role="tab" aria-pressed="false" data-filter="saved">⭐ Saved</button>
+  </div>
+
+  <main class="feed" id="feed">
+    <div class="skeleton-card"><div class="skel-line short"></div><div class="skel-line tall"></div><div class="skel-line" style="width:90%"></div></div>
+    <div class="skeleton-card"><div class="skel-line short"></div><div class="skel-line tall"></div><div class="skel-line" style="width:80%"></div></div>
+    <div class="skeleton-card"><div class="skel-line short"></div><div class="skel-line tall"></div><div class="skel-line" style="width:95%"></div></div>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a class="pressable" href="https://stluker.com">STLuker</a>
+      <a class="pressable" href="https://sports.stluker.com">STL/7</a>
+      <a class="pressable" href="https://music.stluker.com">STL/Music</a>
+      <a class="pressable" href="https://family.stluker.com">Family Hub</a>
+      <a class="pressable" href="https://status.stluker.com">Ops Board</a>
+    </div>
+    <p class="footer-note">Auto-pulsed daily · Headlines rewritten from public sources, never copied verbatim · Launch data via Launch Library 2<br>© 2026 The Daily Orbit · Part of the STLuker Network · Saint Louis, MO</p>
+  </footer>
+
+<script>
+(function () {
+  const CATEGORY_ICON = { Launch: '🚀', Astronomy: '🔭', Mission: '🛰️', Policy: '📄', Industry: '📄' };
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins = Math.round(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.round(hrs / 24) + 'd ago';
+  }
+
+  function statusClass(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'go') return 'go';
+    if (s.includes('scrub') || s.includes('fail')) return 'scrub';
+    return 'tbd';
+  }
+
+  function renderPulse(meta) {
+    const badge = document.getElementById('pulseBadge');
+    if (!meta || !meta.lastUpdated) {
+      badge.textContent = 'Last pulse: —';
+      return;
+    }
+    badge.textContent = 'Last pulse: ' + timeAgo(meta.lastUpdated);
+    const ageHrs = (Date.now() - new Date(meta.lastUpdated).getTime()) / 3.6e6;
+    badge.classList.toggle('fresh', ageHrs < 30);
+  }
+
+  function renderPulseStats(data) {
+    const storyCount =
+      ((data.breaking && data.breaking.last24h) || []).length +
+      (data.astronomy || []).length +
+      (data.missions || []).length +
+      (data.policy || []).length;
+    const launchCount = ((data.launches && data.launches.next7Days) || []).length;
+    const sourcesOk = (data.meta && data.meta.sourcesPolled) || 0;
+    const sourcesAttempted = (data.meta && data.meta.sourcesAttempted) || sourcesOk;
+
+    document.getElementById('statStories').textContent = storyCount;
+    document.getElementById('statLaunches').textContent = launchCount;
+    document.getElementById('statSources').textContent = sourcesAttempted > sourcesOk ? (sourcesOk + '/' + sourcesAttempted) : sourcesOk;
+  }
+
+  function renderSourceWarning(meta) {
+    const wrap = document.getElementById('sourceWarning');
+    const errors = (meta && meta.sourcesErrored) || [];
+    if (errors.length === 0) { wrap.style.display = 'none'; return; }
+
+    wrap.style.display = 'block';
+    const toggle = document.getElementById('sourceWarningToggle');
+    toggle.textContent = '⚠ ' + errors.length + ' source' + (errors.length > 1 ? 's' : '') + ' had trouble this pulse ›';
+    const list = document.getElementById('sourceWarningList');
+    list.innerHTML = errors.map(function (e) {
+      return '<div>' + esc(e.name) + ' — ' + esc(e.error) + '</div>';
+    }).join('');
+  }
+
+  var MOON_GAUGE_CIRCUMFERENCE = 2 * Math.PI * 30; // matches r=30 in the gauge SVG
+
+  function moonPhaseClass(phaseName) {
+    const p = (phaseName || '').toLowerCase();
+    if (p.includes('full')) return 'phase-full';
+    if (p.includes('gibbous')) return 'phase-gibbous';
+    if (p.includes('quarter')) return 'phase-quarter';
+    return 'phase-dark'; // new moon / crescent
+  }
+
+  function renderMoonGauge(tonight) {
+    const arc = document.getElementById('moonGaugeArc');
+    const pct = document.getElementById('moonGaugePct');
+    const emoji = document.getElementById('moonGaugeEmoji');
+
+    if (!tonight || typeof tonight.moonIllumination !== 'number') {
+      arc.setAttribute('stroke-dashoffset', String(MOON_GAUGE_CIRCUMFERENCE));
+      pct.textContent = '—';
+      return;
+    }
+
+    emoji.textContent = tonight.moonEmoji || '🌙';
+    pct.textContent = tonight.moonIllumination + '%';
+    arc.setAttribute('class', 'moon-gauge-arc ' + moonPhaseClass(tonight.moonPhase));
+    const offset = MOON_GAUGE_CIRCUMFERENCE * (1 - Math.min(100, Math.max(0, tonight.moonIllumination)) / 100);
+    arc.setAttribute('stroke-dashoffset', String(offset));
+  }
+
+  // ---- Today's Briefing — citation-linked synthesis paragraph, ported from
+  // earth.stluker.com's briefing pattern. {{ref:ID}} markers in the model's
+  // text get resolved against a real reference map built from today's actual
+  // stories, so every citation is a genuine link, never invented. ----
+  function buildReferenceMap(data) {
+    const map = {};
+    const allStories = [
+      ...((data.breaking && data.breaking.last24h) || []),
+      ...(data.astronomy || []),
+      ...(data.missions || []),
+      ...(data.policy || []),
+    ];
+    allStories.forEach(function (s) {
+      map[s.id] = { url: s.sourceUrl, label: s.headline };
+    });
+    return map;
+  }
+
+  const REF_MARKER_RE = /\{\{ref:([^}]+)\}\}/g;
+
+  // Parses briefing text containing {{ref:ID}} markers into safe DOM nodes —
+  // plain text as text nodes, markers as small numbered <a> links. Never uses
+  // innerHTML with the model-generated text, since that text is untrusted
+  // content even though it's our own backend's output.
+  function renderBriefingWithRefs(container, text, refMap) {
+    container.textContent = '';
+    const citations = [];
+    const seenIds = {};
+    let lastIndex = 0;
+    let match;
+    REF_MARKER_RE.lastIndex = 0;
+    while ((match = REF_MARKER_RE.exec(text)) !== null) {
+      const plainSegment = text.slice(lastIndex, match.index);
+      if (plainSegment) container.appendChild(document.createTextNode(plainSegment));
+
+      const id = match[1];
+      const ref = refMap[id];
+      if (ref) {
+        if (!(id in seenIds)) {
+          seenIds[id] = citations.length + 1;
+          citations.push({ id: id, url: ref.url, label: ref.label });
+        }
+        const num = seenIds[id];
+        const link = document.createElement('a');
+        link.className = 'briefing-ref';
+        link.href = ref.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = String(num);
+        link.setAttribute('aria-label', 'Source ' + num + ': ' + ref.label);
+        container.appendChild(link);
+      }
+      // Unknown ref id (shouldn't happen — the model is only given real ids
+      // — but defend anyway): marker is dropped rather than shown as raw
+      // {{ref:...}} syntax to the user.
+      lastIndex = REF_MARKER_RE.lastIndex;
+    }
+    const tail = text.slice(lastIndex);
+    if (tail) container.appendChild(document.createTextNode(tail));
+    return citations;
+  }
+
+  function renderSourcesList(listEl, citations) {
+    listEl.innerHTML = '';
+    if (!citations.length) {
+      listEl.style.display = 'none';
+      return;
+    }
+    listEl.style.display = 'block';
+    citations.forEach(function (c, i) {
+      const li = document.createElement('li');
+      const numSpan = document.createElement('span');
+      numSpan.className = 'ref-num';
+      numSpan.textContent = (i + 1) + '.';
+      const link = document.createElement('a');
+      link.href = c.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = c.label;
+      li.appendChild(numSpan);
+      li.appendChild(link);
+      listEl.appendChild(li);
+    });
+  }
+
+  function renderBriefing(data) {
+    const panel = document.getElementById('briefingPanel');
+    const textEl = document.getElementById('briefingText');
+    const sourcesEl = document.getElementById('briefingSources');
+
+    if (!data.briefing) {
+      panel.style.display = 'block';
+      textEl.className = 'briefing-text placeholder';
+      textEl.textContent = "No briefing available yet for today's pulse.";
+      renderSourcesList(sourcesEl, []);
+      return;
+    }
+
+    panel.style.display = 'block';
+    textEl.className = 'briefing-text';
+    const refMap = buildReferenceMap(data);
+    const citations = renderBriefingWithRefs(textEl, data.briefing, refMap);
+    renderSourcesList(sourcesEl, citations);
+  }
+
+  function renderTonightSky(tonight) {
+    renderMoonGauge(tonight);
+
+    const panel = document.getElementById('tonightPanel');
+    if (!tonight) { panel.style.display = 'none'; return; }
+
+    panel.style.display = 'block';
+    document.getElementById('tonightNote').textContent = tonight.note || '';
+
+    const windowEl = document.getElementById('tonightWindow');
+    if (tonight.astronomicalTwilightBegin && tonight.astronomicalTwilightEnd) {
+      const fmt = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+      windowEl.textContent = 'Darkest skies roughly ' + fmt(tonight.astronomicalTwilightEnd) + ' – ' + fmt(tonight.astronomicalTwilightBegin) + ' CT';
+    } else {
+      windowEl.textContent = '';
+    }
+
+    // ADDED 2026-07-24: next naked-eye-visible ISS pass, via the new
+    // issNextVisiblePass field. Only shown when a genuinely visible pass
+    // exists (not just "overhead") — same restraint principle as skipping
+    // the moon-gauge display entirely when there's no real data, rather than
+    // showing a technically-true but useless "ISS overhead at 3pm in broad
+    // daylight" line.
+    const issEl = document.getElementById('tonightIss');
+    const pass = tonight.issNextVisiblePass;
+    if (pass && pass.riseTime) {
+      const fmtTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+      const durationMin = pass.durationSec ? Math.round(pass.durationSec / 60) : null;
+      issEl.style.display = 'block';
+      issEl.innerHTML =
+        '🛰️ <strong>ISS visible</strong> tonight ' + esc(fmtTime(pass.riseTime)) + ' CT, ' +
+        esc(pass.riseCompass || '') + ' to ' + esc(pass.setCompass || '') +
+        (durationMin ? ' (~' + durationMin + ' min)' : '');
+    } else {
+      issEl.style.display = 'none';
+    }
+  }
+
+  let clockTimer = null;
+  function renderMissionClock(launchesData) {
+    const list = (launchesData && launchesData.next7Days) || [];
+    const body = document.getElementById('mcBody');
+    const pill = document.getElementById('mcStatusPill');
+    if (clockTimer) clearInterval(clockTimer);
+
+    const staleNote = (launchesData && launchesData.stale)
+      ? '<div class="mc-meta" style="color:var(--hold);margin-top:8px">⚠ Launch Library was unreachable this pulse — showing last known data from ' + timeAgo(launchesData.asOf) + '.</div>'
+      : '';
+
+    const launches = list;
+    if (!launches || launches.length === 0) {
+      body.innerHTML = '<div class="mc-empty">No launches tracked in the next 7 days yet — check back after the next daily pulse.</div>' + staleNote;
+      pill.textContent = '—';
+      pill.className = 'mc-status tbd';
+      return;
+    }
+
+    const next = launches.slice().sort((a, b) => new Date(a.windowStart) - new Date(b.windowStart))[0];
+    pill.textContent = (next.status || 'TBD').toUpperCase();
+    pill.className = 'mc-status ' + statusClass(next.status);
+
+    body.innerHTML =
+      '<div class="mc-clock" id="mcNums"></div>' +
+      '<div class="mc-mission">' + esc(next.mission) + '</div>' +
+      '<div class="mc-meta">' + esc(next.vehicle) + ' · ' + esc(next.provider) + ' · ' + esc(next.pad) + '</div>' +
+      staleNote;
+
+    const numsEl = document.getElementById('mcNums');
+    function tick() {
+      const diff = new Date(next.windowStart).getTime() - Date.now();
+      if (diff <= 0) {
+        numsEl.innerHTML = '<span class="num">Launch window open</span>';
+        clearInterval(clockTimer);
+        return;
+      }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      numsEl.innerHTML = unit(d, 'Days') + unit(h, 'Hrs') + unit(m, 'Min') + unit(s, 'Sec');
+    }
+    function unit(v, label) {
+      return '<span class="unit"><span class="num">' + String(v).padStart(2, '0') + '</span><span class="unitlabel">' + label + '</span></span>';
+    }
+    tick();
+    clockTimer = setInterval(tick, 1000);
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
+  }
+
+  // ---- Save for later — client-side only, no accounts, per Phase 1 UVP scope ----
+  const SAVED_KEY = 'stlspace:saved';
+  function getSavedIds() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'));
+    } catch { return new Set(); }
+  }
+  function toggleSaved(id) {
+    const saved = getSavedIds();
+    if (saved.has(id)) saved.delete(id); else saved.add(id);
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify([...saved])); } catch {}
+    return saved.has(id);
+  }
+
+  function newsCard(item) {
+    const icon = CATEGORY_ICON[item.category] || '📄';
+    const isSaved = getSavedIds().has(item.id);
+    const otherSources = (item.sources || []).filter(function (s) { return s !== item.sourceName; });
+    const catCls = catKey(item.category);
+    const hasImage = !!item.imageUrl;
+
+    // Image block: shimmer skeleton sits behind the <img> until it loads
+    // (onload fades it in, hides the skeleton), and if the image URL is
+    // dead or blocked, onerror strips the whole media block and falls the
+    // card back to the no-image layout rather than showing a broken icon —
+    // same "fail soft" principle as the ingest pipeline that supplied it.
+    const media = hasImage
+      ? '<div class="nc-media">' +
+          '<div class="nc-media-skel"></div>' +
+          '<img class="nc-media-img" src="' + esc(item.imageUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer" ' +
+            'onload="this.classList.add(\'loaded\');var s=this.previousElementSibling;if(s)s.style.display=\'none\';" ' +
+            'onerror="var m=this.closest(\'.nc-media\');if(m){var c=m.closest(\'.news-card\');if(c)c.classList.add(\'no-image\');m.remove();}">' +
+          '<div class="nc-media-overlay">' +
+            '<span class="nc-source-pill">' + icon + ' ' + esc(item.sourceName) + '</span>' +
+            '<span class="nc-time-pill">' + timeAgo(item.publishedAt) + '</span>' +
+          '</div>' +
+        '</div>'
+      : '';
+
+    const topRow = hasImage
+      ? ''
+      : '<div class="nc-top-row">' +
+          '<span class="nc-source-text">' + icon + ' ' + esc(item.sourceName) + '</span>' +
+          '<span class="nc-time-text">' + timeAgo(item.publishedAt) + '</span>' +
+        '</div>';
+
+    return (
+      '<div class="news-card ' + catCls + (hasImage ? '' : ' no-image') + '" data-cat="' + catCls + '" data-id="' + esc(item.id) + '">' +
+        media +
+        '<div class="nc-body">' +
+          topRow +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+            '<span class="nc-cat-tag">' + esc(item.category || '') + '</span>' +
+            '<button class="bookmark-btn pressable' + (isSaved ? ' saved' : '') + '" data-save-id="' + esc(item.id) + '" aria-label="Save for later" aria-pressed="' + isSaved + '">' + (isSaved ? '★' : '☆') + '</button>' +
+          '</div>' +
+          '<div class="nc-headline">' + esc(item.headline) + '</div>' +
+          '<p class="nc-summary">' + esc(item.summary) + '</p>' +
+          (item.whyItMatters ? '<div class="nc-why"><span class="nc-why-label">Why it matters</span>' + esc(item.whyItMatters) + '</div>' : '') +
+          (item.clusterOf > 1
+            ? '<div class="nc-cluster" data-toggle-sources>Also covered by ' + (item.clusterOf - 1) + ' other source' + (item.clusterOf > 2 ? 's' : '') + ' ›</div>' +
+              '<div class="nc-sources-list">' + otherSources.map(esc).join(', ') + '</div>'
+            : '') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function launchCard(l) {
+    const sc = statusClass(l.status);
+    return (
+      '<div class="card launch-card" data-cat="launch">' +
+        '<div class="launch-left">' +
+          '<div class="launch-vehicle">' + esc(l.vehicle) + '</div>' +
+          '<div class="launch-mission">' + esc(l.mission) + '</div>' +
+          '<div class="launch-meta">' + esc(new Date(l.windowStart).toUTCString().slice(0, 22)) + ' UTC · ' + esc(l.pad) + '</div>' +
+        '</div>' +
+        '<span class="launch-status" style="color:var(--' + sc + '); background:var(--' + sc + '-bg)">' + esc((l.status || 'TBD').toUpperCase()) + '</span>' +
+      '</div>'
+    );
+  }
+
+  function catKey(cat) {
+    if (cat === 'Launch') return 'launch';
+    if (cat === 'Astronomy') return 'astronomy';
+    if (cat === 'Mission') return 'missions';
+    if (cat === 'Policy' || cat === 'Industry') return 'policy';
+    return 'breaking';
+  }
+
+  function emptyState(icon, text) {
+    return '<div class="empty-state"><span class="big">' + icon + '</span>' + text + '</div>';
+  }
+
+  function renderFeed(data) {
+    const feed = document.getElementById('feed');
+    const sections = [];
+
+    const launches = (data.launches && data.launches.next7Days) || [];
+    sections.push({
+      key: 'launch',
+      title: '🚀 Upcoming launches',
+      html: launches.length
+        ? launches.map(launchCard).join('')
+        : emptyState('🛰️', 'Nothing on the pad in the next 7 days. Check back tomorrow.'),
+    });
+
+    const breaking = (data.breaking && data.breaking.last24h) || [];
+    sections.push({
+      key: 'breaking',
+      title: '📰 Breaking — last 24h',
+      html: breaking.length
+        ? breaking.map(newsCard).join('')
+        : emptyState('📭', 'No stories in the last 24 hours yet — the daily pulse hasn\'t landed.'),
+    });
+
+    const astronomy = data.astronomy || [];
+    sections.push({
+      key: 'astronomy',
+      title: '🔭 Astronomy & sky-watching',
+      html: astronomy.length ? astronomy.map(newsCard).join('') : emptyState('✨', 'Nothing new to look up for, yet.'),
+    });
+
+    const missions = data.missions || [];
+    sections.push({
+      key: 'missions',
+      title: '🛰️ Mission updates',
+      html: missions.length ? missions.map(newsCard).join('') : emptyState('🪐', 'No mission updates in this pulse.'),
+    });
+
+    const policy = data.policy || [];
+    sections.push({
+      key: 'policy',
+      title: '📄 Industry & policy',
+      html: policy.length ? policy.map(newsCard).join('') : emptyState('📄', 'Nothing on the business side today.'),
+    });
+
+    feed.innerHTML = sections.map(function (s) {
+      return '<div class="feed-section" data-section="' + s.key + '"><h2 class="feed-section-title">' + s.title + '</h2>' + s.html + '</div>';
+    }).join('');
+
+    applyFilter(currentFilter);
+  }
+
+  let currentFilter = 'all';
+  function applyFilter(filter) {
+    currentFilter = filter;
+
+    if (filter === 'saved') {
+      const saved = getSavedIds();
+      document.querySelectorAll('.feed-section').forEach(function (section) { section.style.display = ''; });
+      document.querySelectorAll('.news-card[data-id]').forEach(function (card) {
+        card.style.display = saved.has(card.getAttribute('data-id')) ? '' : 'none';
+      });
+      document.querySelectorAll('.launch-card').forEach(function (card) { card.style.display = 'none'; });
+      // Hide section headers whose cards are all filtered out
+      document.querySelectorAll('.feed-section').forEach(function (section) {
+        const visibleCards = [...section.querySelectorAll('.news-card')].some(function (c) { return c.style.display !== 'none'; });
+        section.style.display = visibleCards ? '' : 'none';
+      });
+      return;
+    }
+
+    document.querySelectorAll('.news-card, .launch-card').forEach(function (c) { c.style.display = ''; });
+    document.querySelectorAll('.feed-section').forEach(function (section) {
+      const key = section.getAttribute('data-section');
+      section.style.display = (filter === 'all' || filter === key) ? '' : 'none';
+    });
+  }
+
+  document.getElementById('sourceWarningToggle').addEventListener('click', function () {
+    document.getElementById('sourceWarningList').classList.toggle('open');
+  });
+
+  document.getElementById('filters').addEventListener('click', function (e) {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    document.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+    btn.setAttribute('aria-pressed', 'true');
+    applyFilter(btn.getAttribute('data-filter'));
+  });
+
+  document.getElementById('feed').addEventListener('click', function (e) {
+    const saveBtn = e.target.closest('[data-save-id]');
+    if (saveBtn) {
+      const id = saveBtn.getAttribute('data-save-id');
+      const nowSaved = toggleSaved(id);
+      saveBtn.classList.toggle('saved', nowSaved);
+      saveBtn.textContent = nowSaved ? '★' : '☆';
+      saveBtn.setAttribute('aria-pressed', String(nowSaved));
+      if (currentFilter === 'saved' && !nowSaved) {
+        saveBtn.closest('.news-card').style.display = 'none';
+      }
+      return;
+    }
+    const toggleBtn = e.target.closest('[data-toggle-sources]');
+    if (toggleBtn) {
+      const list = toggleBtn.nextElementSibling;
+      if (list && list.classList.contains('nc-sources-list')) {
+        list.classList.toggle('open');
+      }
+    }
+  });
+
+  fetch('/data.json')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      renderPulse(data.meta);
+      renderSourceWarning(data.meta);
+      renderPulseStats(data);
+      renderBriefing(data);
+      renderTonightSky(data.tonight);
+      renderMissionClock(data.launches || { next7Days: [] });
+      renderFeed(data);
+    })
+    .catch(function () {
+      document.getElementById('feed').innerHTML = emptyState('⚠️', 'Could not load today\'s pulse. Try refreshing in a moment.');
+    });
+})();
+</script>
+</body>
+</html>
