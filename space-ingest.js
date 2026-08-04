@@ -669,6 +669,123 @@ export function mapLl2Response(data) {
 }
 
 // ---------------------------------------------------------------------------
+// 4b. Launch data resilience layer
+//
+// ADDED 2026-08-04: LL2's anonymous tier is contended across every Cloudflare
+// Workers customer sharing the platform's egress IP pool, not just by our own
+// request volume — see the CHANGED 2026-07-24 note above and the confirmed
+// `authenticated=false` 429s in production. Decided against paying for an LL2
+// key (Patreon-gated, and RocketLaunch.Live — the one real independent
+// alternative — also went paid-only as of this check). Instead: a scheduled
+// GitHub Actions job (fetch-ll2-to-kv.mjs, runs from GitHub's own IP range,
+// outside the contended pool) calls fetchUpcomingLaunches() below directly
+// and writes the result into SPACE_KV under LL2_KV_KEY on its own schedule,
+// independent of stl-dispatcher's cron. This function is what stl-dispatcher
+// reads at ingest time — falling through KV → a direct in-Worker LL2 attempt
+// (cheap to try, sometimes still succeeds) → the SpaceX community API
+// (genuinely independent, free, no rate limit, but SpaceX-only coverage) —
+// before finally surfacing an error for the existing stale-carry-forward
+// logic in runSpaceIngest() to handle exactly as it does today.
+// ---------------------------------------------------------------------------
+
+const LL2_KV_KEY = "ll2-launches";
+const LL2_KV_STALE_MS = 24 * 3600 * 1000; // GH Action runs every 6h; 24h tolerates a few missed runs
+const SPACEX_QUERY_URL = "https://api.spacexdata.com/v5/launches/query";
+
+export async function fetchSpaceXFallbackLaunches(fetchImpl = fetch) {
+  const lastFetch = new Date().toISOString();
+  try {
+    const res = await fetchImpl(SPACEX_QUERY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: { upcoming: true },
+        options: {
+          populate: [
+            { path: "rocket", select: "name" },
+            { path: "launchpad", select: "name locality region" },
+          ],
+          limit: 20,
+          // NOTE: SpaceX-API's server-side sort has been unreliable (see
+          // github.com/r-spacex/SpaceX-API/issues/996) — sort client-side
+          // below instead of trusting `options.sort` here.
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const now = Date.now();
+    const sevenDays = now + 7 * 24 * 3600 * 1000;
+
+    const launches = (data.docs || [])
+      .map((l) => ({
+        id: "spacex-" + l.id,
+        vehicle: (l.rocket && l.rocket.name) || "Falcon 9",
+        mission: l.name || "Unnamed mission",
+        provider: "SpaceX",
+        pad: l.launchpad?.name ? `${l.launchpad.name}, ${l.launchpad.locality || ""}`.trim() : "TBD",
+        windowStart: l.date_utc,
+        status: l.tbd ? "TBD" : "Go",
+        source: "SpaceX API (fallback — SpaceX launches only)",
+      }))
+      .filter((l) => {
+        const t = new Date(l.windowStart).getTime();
+        if (Number.isNaN(t)) return true;
+        return t >= now && t <= sevenDays;
+      })
+      .sort((a, b) => new Date(a.windowStart) - new Date(b.windowStart));
+
+    return { launches, error: null, debug: { lastFetch, source: "spacex-fallback" } };
+  } catch (err) {
+    return { launches: [], error: String(err.message || err), debug: { lastFetch, source: "spacex-fallback" } };
+  }
+}
+
+async function readLl2FromKv(env) {
+  try {
+    const raw = await env.SPACE_KV.get(LL2_KV_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const age = Date.now() - new Date(parsed.fetchedAt).getTime();
+    if (Number.isNaN(age) || age > LL2_KV_STALE_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchLaunchesWithFallback(env, fetchImpl = fetch) {
+  // 1. GitHub Action's KV write — the primary path, off the contended pool.
+  const fromKv = await readLl2FromKv(env);
+  if (fromKv && Array.isArray(fromKv.launches) && fromKv.launches.length > 0) {
+    return {
+      launches: fromKv.launches,
+      error: null,
+      debug: { ...fromKv.debug, source: "ll2-kv", fetchedAt: fromKv.fetchedAt },
+    };
+  }
+
+  // 2. Direct in-Worker LL2 call — cheap to attempt, occasionally still
+  // succeeds even on the contended pool, so worth trying before giving up
+  // on LL2 entirely.
+  const direct = await fetchUpcomingLaunches(env, fetchImpl);
+  if (!direct.error && direct.launches.length > 0) {
+    return { ...direct, debug: { ...direct.debug, source: "ll2-direct" } };
+  }
+
+  // 3. SpaceX fallback — genuinely independent free source, partial coverage.
+  const spacex = await fetchSpaceXFallbackLaunches(fetchImpl);
+  if (!spacex.error && spacex.launches.length > 0) {
+    return { ...spacex, debug: { ...spacex.debug, source: "spacex-fallback" } };
+  }
+
+  // 4. Everything failed — surface the most informative error (LL2's, since
+  // it's the primary source) and let runSpaceIngest's existing stale
+  // carry-forward logic take over from here, same as before this change.
+  return { launches: [], error: direct.error || spacex.error || "all launch sources failed", debug: direct.debug };
+}
+
+// ---------------------------------------------------------------------------
 // 5b. "Tonight's Sky" — the one feature a generic aggregator structurally can't
 // do, since it's grounded in one specific location instead of serving everyone.
 // Moon phase is computed locally (no network call, so it always works even if
@@ -819,7 +936,7 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
   const [feedResults, snapiResult, ll2Result, tonight] = await Promise.all([
     Promise.all(FEEDS.map((f) => fetchFeed(f, fetchImpl))),
     fetchSpaceflightNewsArticles(fetchImpl),
-    fetchUpcomingLaunches(env, fetchImpl),
+    fetchLaunchesWithFallback(env, fetchImpl),
     buildTonightSky(fetchImpl),
   ]);
 
@@ -876,6 +993,11 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
     name: "Launch Library 2",
     count: launches.length,
     authenticated: ll2Debug?.authenticated ?? false,
+    // ADDED 2026-08-04: which of the fallback chain's tiers actually served
+    // this pulse — "ll2-kv" (GH Action, the healthy path), "ll2-direct"
+    // (Worker got lucky), "spacex-fallback" (LL2 fully down, partial
+    // coverage), or undefined if even the fallback chain came back empty.
+    source: ll2Debug?.source ?? null,
     error: launchesStale ? `${ll2Error} (serving ${launches.length} carried-forward stale launches)` : ll2Error,
   });
 

@@ -1,0 +1,33 @@
+name: Fetch launch schedule to KV
+
+# Runs from GitHub's own IP range — deliberately NOT from Cloudflare Workers,
+# whose shared egress IP pool is what gets LL2's anonymous tier rate-limited
+# in the first place. See scripts/fetch-ll2-to-kv.mjs for the full rationale.
+#
+# Schedule: every 6 hours. LL2 launch windows rarely shift meaningfully more
+# often than that, and this keeps well within GitHub Actions' free-tier
+# minutes for a public repo (each run is a few seconds — two small HTTP
+# calls and a KV write, no build step).
+"on":
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {} # manual "Run workflow" button — use this to test/verify before trusting the schedule
+
+jobs:
+  fetch-launches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch launches and write to KV
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+        run: node scripts/fetch-ll2-to-kv.mjs
