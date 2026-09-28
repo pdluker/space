@@ -62,11 +62,18 @@
  * http/https only) before anything reaches KV. At cluster time, a story
  * without an image on its representative item still checks every other
  * item in its cluster (same story from other outlets) before giving up —
- * see summarizeClusters(). Purely additive: imageUrl is null wherever a
- * source doesn't provide one, so no existing consumer of this schema (the
- * worker, the frontend) breaks; the frontend just needs an `if (imageUrl)`
- * to start rendering thumbnails. No new subrequests — this is parsed out of
- * responses already being fetched, not a separate fetch per image.
+ * see summarizeClusters().
+ *
+ * CHANGED 2026-09-28: re-merged. From Aug 4 to Sep 28 this file existed as
+ * two diverged copies — stl-dispatcher's (deployed; had the Jul 25
+ * Skip/index-matching fix) and the space repo's (had imageUrl and the
+ * ll2-launches KV fallback chain, never deployed). Net effect: the GitHub
+ * Action kept writing correct launches to SPACE_KV["ll2-launches"] every 6h
+ * while the deployed ingest never read that key, so the dashboard showed
+ * "Nothing on the pad" whenever LL2 429'd the Worker. This file is now the
+ * single merged version; the space repo's copy must stay byte-identical
+ * (its GitHub Action imports fetchUpcomingLaunches/fetchSpaceXFallbackLaunches
+ * from it).
  */
 
 // ---------------------------------------------------------------------------
@@ -214,15 +221,11 @@ export function parseRssItems(xml) {
   return items;
 }
 
-// ADDED: image extraction for card thumbnails. Tries the common RSS/Atom
-// image carriers in order of reliability, falls back to sniffing an <img
-// src="..."> out of whatever HTML the feed embeds in description/content —
-// every source here uses a different convention and none are guaranteed to
-// have an image at all, so this fails soft (null) rather than throwing.
-// Order matters: media:content/thumbnail and enclosure are purpose-built for
-// this and give the cleanest, usually largest image; the <img> sniff is a
-// last resort against raw HTML that's more likely to catch a tracking pixel
-// or unrelated inline graphic.
+// Image extraction for card thumbnails. Tries the common RSS/Atom image
+// carriers in order of reliability, falls back to sniffing an <img src="...">
+// out of whatever HTML the feed embeds in description/content — fails soft
+// (null) rather than throwing. media:content/thumbnail and enclosure come
+// first because the <img> sniff is more likely to catch a tracking pixel.
 function extractImageUrl(block, contentEncoded, description) {
   // 1. media:content / media:thumbnail (Media RSS — used by NASA, ESA, many others)
   let m = block.match(/<media:content[^>]*url="([^"]+)"[^>]*medium="image"/i)
@@ -236,9 +239,8 @@ function extractImageUrl(block, contentEncoded, description) {
     || block.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image\/[^"]*"/i);
   if (m && isValidImageUrl(decodeEntities(m[1]))) return decodeEntities(m[1]);
 
-  // 3. First <img src="..."> found in content:encoded or description HTML.
-  // Entities decoded first — descriptions commonly arrive as &lt;img&gt;-escaped
-  // text rather than raw HTML, which would otherwise never match the tag regex.
+  // 3. First <img src="..."> in content:encoded or description HTML. Entities
+  // decoded first — descriptions often arrive as &lt;img&gt;-escaped text.
   const htmlBlob = decodeEntities((contentEncoded || "") + (description || ""));
   m = htmlBlob.match(/<img[^>]*src="([^"]+)"/i);
   if (m && isValidImageUrl(m[1])) return m[1];
@@ -246,10 +248,8 @@ function extractImageUrl(block, contentEncoded, description) {
   return null;
 }
 
-// Sanity check applied at every extraction site above via the wrapper below —
-// only absolute http(s) URLs are ever allowed through to KV/the frontend.
-// Guards against relative paths, data: URIs, and tracking-pixel garbage some
-// feeds embed as their "first <img>".
+// Only absolute http(s) URLs are ever allowed through to KV/the frontend —
+// guards against relative paths, data: URIs, and similar garbage.
 function isValidImageUrl(url) {
   if (!url || typeof url !== "string") return false;
   try {
@@ -380,6 +380,8 @@ export async function summarizeClusters(clusters, env, fetchImpl = fetch) {
   const results = [];
   let batchesFailed = 0;
   let lastRawSnippet = null;
+  let skippedOffTopic = 0;
+  let unmatchedEntries = 0;
 
   for (const batch of batches) {
     const prompt = buildSummarizationPrompt(batch);
@@ -428,9 +430,44 @@ export async function summarizeClusters(clusters, env, fetchImpl = fetch) {
       lastRawSnippet = text.slice(0, 500);
     }
 
-    parsed.forEach((entry, idx) => {
-      const cluster = batch[idx];
-      if (!cluster) return;
+    // FIXED 2026-07-25: this used to match parsed[idx] to batch[idx] by pure
+    // array position. Adding the Skip category exposed a real bug in that
+    // approach — Haiku sometimes omitted an entry entirely for a Skip'd item
+    // instead of including it with category:"Skip" as instructed, which
+    // shifted every subsequent entry in the batch by one position and
+    // silently paired real headlines with the wrong article's sourceUrl
+    // (confirmed live: a "lunar samples" headline pointing at a SpaceX
+    // Starship URL). Matching by the explicit "index" field the prompt now
+    // requires every entry to echo back is robust to omissions/reordering —
+    // a positional match is not.
+    const entryByIndex = new Map();
+    parsed.forEach((entry) => {
+      if (typeof entry.index === "number") entryByIndex.set(entry.index, entry);
+    });
+
+    let unmatchedInBatch = 0;
+    batch.forEach((cluster, i) => {
+      const entry = entryByIndex.get(i);
+      if (!entry) {
+        // No entry at all for this cluster (omitted, or missing/invalid
+        // index) — safer to drop it than to guess, since guessing is exactly
+        // what caused the mismatch bug above.
+        unmatchedInBatch++;
+        return;
+      }
+
+      // ADDED 2026-07-25: SpaceDaily (and potentially other aggregator feeds)
+      // mixes genuine space-off-topic filler into its RSS feed — Haiku was
+      // already correctly noticing this in whyItMatters ("This is not
+      // space-related content") but nothing acted on that signal, so it
+      // still landed on the dashboard under a real category. The prompt now
+      // asks for an explicit "Skip" category for exactly this case, and this
+      // is where that signal actually gets enforced.
+      if (entry.category === "Skip") {
+        skippedOffTopic++;
+        return;
+      }
+
       results.push({
         id: hashId(cluster.representative.link),
         headline: entry.headline,
@@ -442,18 +479,17 @@ export async function summarizeClusters(clusters, env, fetchImpl = fetch) {
         clusterOf: cluster.clusterOf,
         sources: [...new Set(cluster.sources)],
         whyItMatters: entry.whyItMatters || null,
-        // Prefer the representative's own image, but a clustered story (same
-        // event, multiple outlets) is likely to have SOME source with an
-        // image even if the first-seen item didn't carry one — scan the
-        // whole cluster before giving up. Never blocks on this; null just
-        // means the card renders without a thumbnail.
+        // Prefer the representative's own image, but another outlet in the
+        // same cluster may carry one even if the first-seen item didn't.
         imageUrl: cluster.representative.imageUrl
           || cluster.allItems.find((i) => i.imageUrl)?.imageUrl
           || null,
       });
     });
+
+    if (unmatchedInBatch > 0) unmatchedEntries += unmatchedInBatch;
   }
-  return { summarized: results, batchesTotal: batches.length, batchesFailed, lastRawSnippet };
+  return { summarized: results, batchesTotal: batches.length, batchesFailed, skippedOffTopic, unmatchedEntries, lastRawSnippet };
 }
 
 // ---------------------------------------------------------------------------
@@ -531,10 +567,23 @@ function buildSummarizationPrompt(batch) {
     "never copy phrasing from the title/description verbatim. Also write one honest,",
     "plain-language sentence for \"whyItMatters\" — not hype, just what actually",
     "changed or what a reader should understand because of this. Also assign one",
-    "category: Launch, Astronomy, Mission, Policy, or Industry.",
+    "category: Launch, Astronomy, Mission, Policy, Industry, or Skip.",
     "",
-    "Return ONLY a JSON array, one object per input item in the same order, each with",
-    'exactly the keys "headline", "summary", "whyItMatters", "category". No markdown, no preamble.',
+    "Use Skip if the story is NOT meaningfully about space exploration, astronomy,",
+    "spaceflight, or the space industry — some source feeds mix in unrelated general-",
+    "science trivia, entertainment reviews, or human-interest filler (e.g. animal",
+    "biology, history unrelated to spaceflight, TV show recaps, geography trivia).",
+    "When in doubt, Skip rather than force an unrelated story into a space category.",
+    "For a Skip item, headline/summary/whyItMatters can be empty strings — they won't",
+    "be used.",
+    "",
+    "CRITICAL: you MUST return exactly one object per input item below, including",
+    "Skip items — never omit an entry, even one you're marking Skip. Each object",
+    "MUST include the item's original \"index\" value unchanged, so entries can be",
+    "matched back to their source item regardless of output order.",
+    "",
+    "Return ONLY a JSON array, each object with exactly the keys",
+    '"index", "headline", "summary", "whyItMatters", "category". No markdown, no preamble.',
     "",
     "Stories:",
     JSON.stringify(items, null, 2),
@@ -669,27 +718,23 @@ export function mapLl2Response(data) {
 }
 
 // ---------------------------------------------------------------------------
-// 4b. Launch data resilience layer
+// 5a. Launch data resilience layer
 //
-// ADDED 2026-08-04: LL2's anonymous tier is contended across every Cloudflare
-// Workers customer sharing the platform's egress IP pool, not just by our own
-// request volume — see the CHANGED 2026-07-24 note above and the confirmed
-// `authenticated=false` 429s in production. Decided against paying for an LL2
-// key (Patreon-gated, and RocketLaunch.Live — the one real independent
-// alternative — also went paid-only as of this check). Instead: a scheduled
-// GitHub Actions job (fetch-ll2-to-kv.mjs, runs from GitHub's own IP range,
-// outside the contended pool) calls fetchUpcomingLaunches() below directly
-// and writes the result into SPACE_KV under LL2_KV_KEY on its own schedule,
-// independent of stl-dispatcher's cron. This function is what stl-dispatcher
-// reads at ingest time — falling through KV → a direct in-Worker LL2 attempt
-// (cheap to try, sometimes still succeeds) → the SpaceX community API
-// (genuinely independent, free, no rate limit, but SpaceX-only coverage) —
-// before finally surfacing an error for the existing stale-carry-forward
-// logic in runSpaceIngest() to handle exactly as it does today.
+// ADDED 2026-08-04 (space repo), DEPLOYED 2026-09-28: LL2's anonymous tier is
+// contended across every Cloudflare Workers customer sharing the platform's
+// egress IP pool — confirmed `authenticated=false` 429s in production. A
+// scheduled GitHub Actions job (space repo, scripts/fetch-ll2-to-kv.mjs, runs
+// from GitHub's IP range) calls fetchUpcomingLaunches() below and writes the
+// result into SPACE_KV under LL2_KV_KEY every ~6h. This is what the ingest
+// reads first, falling through KV → a direct in-Worker LL2 attempt → the
+// SpaceX community API → an error for runSpaceIngest()'s stale carry-forward.
 // ---------------------------------------------------------------------------
 
 const LL2_KV_KEY = "ll2-launches";
 const LL2_KV_STALE_MS = 24 * 3600 * 1000; // GH Action runs every 6h; 24h tolerates a few missed runs
+// NOTE 2026-09-28: api.spacexdata.com returned HTTP 525 when checked; the
+// project has been unmaintained for years. Kept as a last resort because the
+// GitHub Action imports it, but don't expect it to rescue an LL2 outage.
 const SPACEX_QUERY_URL = "https://api.spacexdata.com/v5/launches/query";
 
 export async function fetchSpaceXFallbackLaunches(fetchImpl = fetch) {
@@ -706,9 +751,8 @@ export async function fetchSpaceXFallbackLaunches(fetchImpl = fetch) {
             { path: "launchpad", select: "name locality region" },
           ],
           limit: 20,
-          // NOTE: SpaceX-API's server-side sort has been unreliable (see
-          // github.com/r-spacex/SpaceX-API/issues/996) — sort client-side
-          // below instead of trusting `options.sort` here.
+          // SpaceX-API's server-side sort has been unreliable (see
+          // github.com/r-spacex/SpaceX-API/issues/996) — sorted client-side below.
         },
       }),
     });
@@ -748,7 +792,16 @@ async function readLl2FromKv(env) {
     const parsed = JSON.parse(raw);
     const age = Date.now() - new Date(parsed.fetchedAt).getTime();
     if (Number.isNaN(age) || age > LL2_KV_STALE_MS) return null;
-    return parsed;
+    // The Action's 7-day window was computed up to LL2_KV_STALE_MS ago, so a
+    // launch in it may already have flown. Drop those here rather than show a
+    // departed rocket as "upcoming". A missing/malformed windowStart is kept,
+    // matching mapLl2Response's TBD handling.
+    const now = Date.now();
+    const launches = (parsed.launches || []).filter((l) => {
+      const t = new Date(l.windowStart).getTime();
+      return Number.isNaN(t) || t >= now;
+    });
+    return { ...parsed, launches };
   } catch {
     return null;
   }
@@ -761,28 +814,27 @@ export async function fetchLaunchesWithFallback(env, fetchImpl = fetch) {
     return {
       launches: fromKv.launches,
       error: null,
+      asOf: fromKv.fetchedAt,
       debug: { ...fromKv.debug, source: "ll2-kv", fetchedAt: fromKv.fetchedAt },
     };
   }
 
-  // 2. Direct in-Worker LL2 call — cheap to attempt, occasionally still
-  // succeeds even on the contended pool, so worth trying before giving up
-  // on LL2 entirely.
+  // 2. Direct in-Worker LL2 call — occasionally still succeeds even on the
+  // contended pool, so worth one attempt before giving up on LL2.
   const direct = await fetchUpcomingLaunches(env, fetchImpl);
   if (!direct.error && direct.launches.length > 0) {
-    return { ...direct, debug: { ...direct.debug, source: "ll2-direct" } };
+    return { ...direct, asOf: direct.debug?.lastLL2Fetch || null, debug: { ...direct.debug, source: "ll2-direct" } };
   }
 
-  // 3. SpaceX fallback — genuinely independent free source, partial coverage.
+  // 3. SpaceX fallback — independent source, SpaceX-only coverage.
   const spacex = await fetchSpaceXFallbackLaunches(fetchImpl);
   if (!spacex.error && spacex.launches.length > 0) {
-    return { ...spacex, debug: { ...spacex.debug, source: "spacex-fallback" } };
+    return { ...spacex, asOf: spacex.debug.lastFetch, debug: { ...spacex.debug, source: "spacex-fallback" } };
   }
 
-  // 4. Everything failed — surface the most informative error (LL2's, since
-  // it's the primary source) and let runSpaceIngest's existing stale
-  // carry-forward logic take over from here, same as before this change.
-  return { launches: [], error: direct.error || spacex.error || "all launch sources failed", debug: direct.debug };
+  // 4. Everything failed — surface LL2's error (the primary source) and let
+  // runSpaceIngest's stale carry-forward take over.
+  return { launches: [], error: direct.error || spacex.error || "all launch sources failed", asOf: null, debug: direct.debug };
 }
 
 // ---------------------------------------------------------------------------
@@ -947,7 +999,9 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
   const sourcesErrored = feedResults.filter((r) => r.error).map((r) => ({ name: r.feed.name, error: r.error }));
   let { launches, error: ll2Error, debug: ll2Debug } = ll2Result;
   let launchesStale = false;
-  let launchesAsOf = startedAt;
+  // When served from the GitHub Action's KV write, the data is as old as that
+  // write (up to ~6h), not as old as this run — report the real age.
+  let launchesAsOf = ll2Result.asOf || startedAt;
 
   // ADDED 2026-07-24: per-source diagnostics ({name, count, error}) for all 14
   // feeds + LL2, ported from the same pattern already shipped in stl-sports
@@ -993,10 +1047,9 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
     name: "Launch Library 2",
     count: launches.length,
     authenticated: ll2Debug?.authenticated ?? false,
-    // ADDED 2026-08-04: which of the fallback chain's tiers actually served
-    // this pulse — "ll2-kv" (GH Action, the healthy path), "ll2-direct"
-    // (Worker got lucky), "spacex-fallback" (LL2 fully down, partial
-    // coverage), or undefined if even the fallback chain came back empty.
+    // Which tier of fetchLaunchesWithFallback served this run: "ll2-kv"
+    // (GitHub Action, the healthy path), "ll2-direct", "spacex-fallback", or
+    // null if the whole chain came back empty.
     source: ll2Debug?.source ?? null,
     error: launchesStale ? `${ll2Error} (serving ${launches.length} carried-forward stale launches)` : ll2Error,
   });
@@ -1025,6 +1078,8 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
     summarized,
     batchesTotal: summaryBatchesTotal,
     batchesFailed: summaryBatchesFailed,
+    skippedOffTopic,
+    unmatchedEntries,
     lastRawSnippet: summaryLastRawSnippet,
   } = await summarizeClusters(clusters, env, fetchImpl);
 
@@ -1034,12 +1089,24 @@ export async function runSpaceIngest(env, fetchImpl = fetch) {
   // surfaced anywhere). clustersFound vs. count tells you immediately
   // whether items existed but failed to summarize (this bug) vs. genuinely
   // nothing was fetched (a source-level problem, already visible above).
+  // skippedOffTopic surfaces the new Skip-category filter's effect — e.g.
+  // SpaceDaily mixing non-space filler into its feed — so a source that's
+  // becoming mostly off-topic noise is visible here rather than a mystery.
+  // unmatchedEntries surfaces the follow-on bug the Skip filter exposed:
+  // Haiku omitting an entry rather than returning it with category:"Skip"
+  // used to silently misalign every later item in that batch (a real
+  // headline paired with the wrong article's sourceUrl, confirmed live
+  // Jul 25) — matching by explicit index (see summarizeClusters) fixes the
+  // misalignment, and this count means a dropped-but-not-misattributed item
+  // is visible here instead of invisible.
   diagnostics.push({
     name: "Summarization",
     count: summarized.length,
     clustersFound: clusters.length,
     batchesTotal: summaryBatchesTotal,
     batchesFailed: summaryBatchesFailed,
+    skippedOffTopic,
+    unmatchedEntries,
     error: summaryBatchesFailed > 0
       ? `${summaryBatchesFailed}/${summaryBatchesTotal} batch(es) produced no parseable output — possible truncation. Raw snippet: ${summaryLastRawSnippet}`
       : null,
