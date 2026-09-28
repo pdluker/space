@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>STL/Space — The Daily Orbit</title>
-<meta name="description" content="Everything in orbit, briefed. A daily dispatch on launches, missions, and the night sky — sourced from 14 outlets." />
+<meta name="description" content="Everything in orbit, briefed. A daily dispatch on launches, missions, and the night sky — sourced from public space-news feeds." />
 <meta name="theme-color" content="#F2F2F7" />
 <style>
   :root{
@@ -689,7 +689,7 @@
         <div>
           <p class="hero-card-eyebrow">The Daily Orbit · St. Louis</p>
           <h1 class="hero-card-title">Everything in orbit, briefed.</h1>
-          <p class="hero-card-subtitle">A daily dispatch on launches, missions, and the night sky — clear, sourced from 14 outlets, no noise.</p>
+          <p class="hero-card-subtitle">A daily dispatch on launches, missions, and the night sky — clear, sourced from <span id="heroFeedCount">public</span> news feeds, no noise.</p>
         </div>
         <div class="moon-gauge-wrap" id="moonGaugeWrap">
           <svg viewBox="0 0 74 74">
@@ -724,7 +724,7 @@
     </div>
 
     <div class="pulse-stats" id="pulseStats">
-      <div class="stat"><div class="stat-num" id="statStories">–</div><div class="stat-label">Stories today</div></div>
+      <div class="stat"><div class="stat-num" id="statStories">–</div><div class="stat-label">Stories, last 24h</div></div>
       <div class="stat"><div class="stat-num" id="statLaunches">–</div><div class="stat-label">Launches this week</div></div>
       <div class="stat"><div class="stat-num" id="statSources">–</div><div class="stat-label">Sources checked</div></div>
     </div>
@@ -801,11 +801,10 @@
   }
 
   function renderPulseStats(data) {
-    const storyCount =
-      ((data.breaking && data.breaking.last24h) || []).length +
-      (data.astronomy || []).length +
-      (data.missions || []).length +
-      (data.policy || []).length;
+    // last24h already holds every summarized story (all categories) published
+    // in the 24h before this pulse. The category arrays reach back 72h and
+    // overlap it, so summing them overstated "today" (33 vs 8 on Sep 28).
+    const storyCount = ((data.breaking && data.breaking.last24h) || []).length;
     const launchCount = ((data.launches && data.launches.next7Days) || []).length;
     const sourcesOk = (data.meta && data.meta.sourcesPolled) || 0;
     const sourcesAttempted = (data.meta && data.meta.sourcesAttempted) || sourcesOk;
@@ -813,6 +812,14 @@
     document.getElementById('statStories').textContent = storyCount;
     document.getElementById('statLaunches').textContent = launchCount;
     document.getElementById('statSources').textContent = sourcesAttempted > sourcesOk ? (sourcesOk + '/' + sourcesAttempted) : sourcesOk;
+
+    // Hero copy used to hardcode "14 outlets". Count the news feeds that
+    // actually returned stories this pulse (diagnostics entries with items,
+    // minus the non-news entries).
+    const NON_FEED = ['Launch Library 2', 'ISS Pass API', 'Summarization', 'Daily Briefing'];
+    const diag = (data.meta && data.meta.diagnostics) || [];
+    const liveFeeds = diag.filter((d) => NON_FEED.indexOf(d.name) === -1 && d.count > 0).length;
+    if (liveFeeds > 0) document.getElementById('heroFeedCount').textContent = liveFeeds;
   }
 
   function renderSourceWarning(meta) {
